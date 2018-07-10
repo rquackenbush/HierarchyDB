@@ -1,22 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
+using HierarchyDb.Client.Model;
+using HierarchyDb.Client.Storage;
 
 namespace HierarchyDb.Client
 {
     public class ProjectClient
     {
-        private Dictionary<Guid, Entity> _entities = new Dictionary<Guid, Entity>();
-        public Dictionary<Guid, EntityDefinition> _entityDefinitions = new Dictionary<Guid, EntityDefinition>();
+        private readonly StorageBase _storage;
 
-        public Entity CreateEntity(Guid entityDefinitionId, string name, Field[] fields = null)
+        public ProjectClient(StorageBase storage)
         {
-            fields = fields ?? new Field[] { };
+            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        }
+
+        public async Task<Entity> CreateEntityAsync(CreateEntityRequest request, CancellationToken cancellationToken = new CancellationToken())
+        {
+            var fields = request.Fields ?? new Field[] { };
 
             //Attempt to get the entity definition.
-            if (!_entityDefinitions.TryGetValue(entityDefinitionId, out var entityDefinition))
-                throw new EntityDefinitionNotFoundException($"Entity definition '{entityDefinitionId}' not found.");
+            var entityDefinition = await _storage.GetEntityDefinitionAsync(request.EntityDefinitionId, cancellationToken);
+
+            if (entityDefinition == null)
+                throw new EntityDefinitionNotFoundException($"Entity definition '{request.EntityDefinitionId}' not found.");
 
             foreach (var field in fields)
             {
@@ -33,102 +42,59 @@ namespace HierarchyDb.Client
             var entity = new Entity()
             {
                 Id = Guid.NewGuid(),
-                EntityDefinitionId = entityDefinitionId,
-                Name = name,
+                EntityDefinitionId = request.EntityDefinitionId,
+                Name = request.Name,
                 Fields = fields,
                 CreatedUtc = DateTime.UtcNow
             };
 
             //Add the entity to the backing store.
-            _entities.Add(entity.Id, entity);
+            await _storage.AddEntityAsync(entity, cancellationToken);
 
             return entity;
         }
 
-        public Entity GetEntity(Guid id)
+        public async Task<Entity> GetEntityAsync(Guid id, CancellationToken cancellationToken = new CancellationToken())
         {
-            if (_entities.TryGetValue(id, out var entity))
-                return entity;
-
-            return null;
+            return await _storage.GetEntityAsync(id, cancellationToken);
         }
 
-        public void DeleteEntity(Guid id)
+        public async Task DeleteEntity(Guid id, CancellationToken cancellationToken = new CancellationToken())
         {
-            if (!_entities.Remove(id))
-                throw new EntityNotFoundException($"Unable to delete entity {id}.");
+            await _storage.DeleteEntityAsync(id, cancellationToken);
         }
 
-        public Entity[] GetEntities(Guid entityDefinitionId)
+        public async Task<Entity[]> GetEntitiesAsync(Guid entityDefinitionId, CancellationToken cancellationToken = new CancellationToken())
         {
-            return _entities.Values
-                .Where(e => e.EntityDefinitionId == entityDefinitionId)
-                .ToArray();
+            return await _storage.GetEntitiesAsync(entityDefinitionId, cancellationToken);
         }
 
-        public EntityDefinition AddEntityDefinition(EntityDefinition entityDefinition)
+        public async Task<EntityDefinition> CreateEntityDefinitionAsync(CreateEntityDefinitionRequest request, CancellationToken cancellationToken = new CancellationToken())
         {
-            _entityDefinitions.Add(entityDefinition.Id, entityDefinition);
+            var fields = request.Fields ?? new FieldDefinition[] { };
+
+            if (request.Id == Guid.Empty)
+                throw new InvalidOperationException($"The specified id contained the default value.");
+
+            Guid id = request.Id ?? Guid.NewGuid();
+
+            var entityDefinition = new EntityDefinition()
+            {
+                Id = id,
+                Name = request.Name,
+                IsConcrete = request.IsConcrete,
+                Fields = fields,
+                CreatedUtc = DateTime.UtcNow,
+            };
+
+            await _storage.AddEntityDefinitionAsync(entityDefinition, cancellationToken);
 
             return entityDefinition;
         }
-    }
 
-    public class EntityNotFoundException : Exception
-    {
-        public EntityNotFoundException()
+        public Task<EntityDefinition> GetEntityDefinitionAsync(Guid id, CancellationToken cancellationToken = new CancellationToken())
         {
-        }
-
-        public EntityNotFoundException(string message) : base(message)
-        {
-        }
-
-        public EntityNotFoundException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected EntityNotFoundException(SerializationInfo info, StreamingContext context) : base(info, context)
-        {
+            return _storage.GetEntityDefinitionAsync(id, cancellationToken);
         }
     }
-
-    public class EntityDefinitionNotFoundException : Exception
-    {
-        public EntityDefinitionNotFoundException()
-        {
-        }
-
-        public EntityDefinitionNotFoundException(string message) : base(message)
-        {
-        }
-
-        public EntityDefinitionNotFoundException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected EntityDefinitionNotFoundException(SerializationInfo info, StreamingContext context) : base(info, context)
-        {
-        }
-    }
-
-    public class FieldDefinitionNotFoundException : Exception
-    {
-        public FieldDefinitionNotFoundException()
-        {
-        }
-
-        public FieldDefinitionNotFoundException(string message) : base(message)
-        {
-        }
-
-        public FieldDefinitionNotFoundException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected FieldDefinitionNotFoundException(SerializationInfo info, StreamingContext context) : base(info, context)
-        {
-        }
-    }
-
 }

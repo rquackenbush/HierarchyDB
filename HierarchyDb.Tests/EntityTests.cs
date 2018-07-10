@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using HierarchyDb.Client;
+using HierarchyDb.Client.Model;
+using HierarchyDb.Client.Storage;
 using Xunit;
 
 namespace HierarchyDb.Tests
@@ -7,70 +11,71 @@ namespace HierarchyDb.Tests
     public class EntityTests
     {
         [Fact]
-        public void SimpleTest()
+        public async Task CreateEntityDefinitionTest()
         {
-            var client = new ProjectClient();
+            var storage = new InMemoryStorage();
+
+            var client = new ProjectClient(storage);
 
             Guid entityDefinitionId = Guid.NewGuid();
 
-            var entityDefinition = new EntityDefinition()
+            var entityDefinitionRequest = new CreateEntityDefinitionRequest()
             {
                 Id = entityDefinitionId,
-                CreatedUtc = DateTime.UtcNow,
                 Name = "Entity",
-                Fields = new FieldDefinition[]{}
+                Fields = new FieldDefinition[]{},
             };
 
-            client.AddEntityDefinition(entityDefinition);
+            var entityDefinition = await client.CreateEntityDefinitionAsync(entityDefinitionRequest);
 
-            client.CreateEntity(entityDefinitionId, "Entity #1");
+            Assert.NotNull(entityDefinition); 
+            Assert.Equal(entityDefinitionId, entityDefinition.Id);
 
-            var entities = client.GetEntities(entityDefinitionId);
+            var retreived = await client.GetEntityDefinitionAsync(entityDefinitionId);
 
-            Assert.Single(entities);
-
-            Assert.Equal(entityDefinitionId, entities[0].EntityDefinitionId);
+            Assert.NotNull(retreived);
+            Assert.Equal(entityDefinitionRequest.Name, retreived.Name);
         }
 
-        [Fact]
-        public void MissingEntityDefinitionTest()
-        {
-            var client = new ProjectClient();
+        //[Fact]
+        //public void MissingEntityDefinitionTest()
+        //{
+        //    var client = new ProjectClient();
 
-            Guid entityDefinitionId = Guid.NewGuid();
+        //    Guid entityDefinitionId = Guid.NewGuid();
 
-            Assert.Throws<EntityDefinitionNotFoundException>(() =>
-                client.CreateEntity(entityDefinitionId, "Entity #1"));
-        }
+        //    Assert.Throws<EntityDefinitionNotFoundException>(() =>
+        //        client.CreateEntity(entityDefinitionId, "Entity #1"));
+        //}
 
-        [Fact]
-        public void MissingFieldDefinitionTest()
-        {
-            var client = new ProjectClient();
+        //[Fact]
+        //public void MissingFieldDefinitionTest()
+        //{
+        //    var client = new ProjectClient();
 
-            Guid entityDefinitionId = Guid.NewGuid();
+        //    Guid entityDefinitionId = Guid.NewGuid();
 
-            var entityDefinition = new EntityDefinition()
-            {
-                Id = entityDefinitionId,
-                CreatedUtc = DateTime.UtcNow,
-                Name = "Entity",
-                Fields = new FieldDefinition[]{}
-            };
+        //    var entityDefinition = new EntityDefinition()
+        //    {
+        //        Id = entityDefinitionId,
+        //        CreatedUtc = DateTime.UtcNow,
+        //        Name = "Entity",
+        //        Fields = new FieldDefinition[]{}
+        //    };
 
-            client.AddEntityDefinition(entityDefinition);
+        //    client.AddEntityDefinition(entityDefinition);
 
-            Assert.Throws<FieldDefinitionNotFoundException>(() =>
-            {
-                client.CreateEntity(entityDefinitionId, "Entity #1", new Field[]
-                {
-                    new Field()
-                    {
-                        FieldDefinitionId = Guid.NewGuid(),
-                        Value = "Hello"
-                    }
-                });
-            });
-        }
+        //    Assert.Throws<FieldDefinitionNotFoundException>(() =>
+        //    {
+        //        client.CreateEntity(entityDefinitionId, "Entity #1", new Field[]
+        //        {
+        //            new Field()
+        //            {
+        //                FieldDefinitionId = Guid.NewGuid(),
+        //                Value = "Hello"
+        //            }
+        //        });
+        //    });
+        //}
     }
 }
